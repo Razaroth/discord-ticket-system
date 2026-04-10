@@ -14,6 +14,7 @@ const {
 
 const { createTicket, getTicket, updateTicket, deleteTicket } = require('../utils/ticketManager');
 const { ticketEmbed, buildStaffActionRows } = require('../utils/embeds');
+const { archiveClosedTicket } = require('../utils/archiveManager');
 const config = require('../../config.json');
 const pendingTicketDrafts = new Map();
 
@@ -694,6 +695,10 @@ module.exports = {
                     status: 'Closed',
                     closeChecklist,
                 });
+                archiveClosedTicket(updated, {
+                    closedBy: interaction.user.id,
+                    closeSource: 'close-checklist-modal',
+                });
 
                 // Revoke customer's ability to send messages
                 await interaction.channel.permissionOverwrites.edit(ticket.userId, {
@@ -757,6 +762,10 @@ module.exports = {
 
             try {
                 const updated = updateTicket(interaction.channelId, { status: 'Closed' });
+                archiveClosedTicket(updated, {
+                    closedBy: interaction.user.id,
+                    closeSource: 'legacy-confirm-close-button',
+                });
 
                 // Revoke customer's ability to send messages
                 await interaction.channel.permissionOverwrites.edit(ticket.userId, {

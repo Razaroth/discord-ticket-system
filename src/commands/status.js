@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { getTicket, updateTicket } = require('../utils/ticketManager');
 const { ticketEmbed, buildStaffActionRows } = require('../utils/embeds');
+const { archiveClosedTicket } = require('../utils/archiveManager');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -27,6 +28,12 @@ module.exports = {
         }
 
         const updated = updateTicket(interaction.channelId, { status });
+        if (status === 'Closed') {
+            archiveClosedTicket(updated, {
+                closedBy: interaction.user.id,
+                closeSource: 'slash-status-closed',
+            });
+        }
 
         if (updated.embedMessageId) {
             try {

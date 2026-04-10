@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { getTicket, updateTicket } = require('../utils/ticketManager');
 const { ticketEmbed, buildStaffActionRows } = require('../utils/embeds');
+const { archiveClosedTicket } = require('../utils/archiveManager');
 const config = require('../../config.json');
 
 module.exports = {
@@ -23,6 +24,10 @@ module.exports = {
 
         try {
             const updated = updateTicket(interaction.channelId, { status: 'Closed' });
+            archiveClosedTicket(updated, {
+                closedBy: interaction.user.id,
+                closeSource: 'slash-close',
+            });
 
             // Revoke customer send permissions
             await interaction.channel.permissionOverwrites.edit(ticket.userId, {
