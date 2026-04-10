@@ -1,6 +1,6 @@
 {
-  "guildId": "YOUR_GUILD_ID",
-  "staffRoleId": "YOUR_STAFF_ROLE_ID",
+  "guildId": "The City of R'lyeh",
+  "staffRoleId": "BOT",
   "ticketsCategoryId": "",
   "logChannelId": ""
 }
