@@ -38,6 +38,23 @@ function formatTechNotes(ticket) {
         .join('\n');
 }
 
+function formatPreTestChecklist(ticket) {
+    const checklist = ticket.preTestChecklist || {};
+    const lines = [
+        `Display/Touch: ${checklist.displayTouch || 'Not provided'}`,
+        `Buttons/Ports: ${checklist.buttonsPorts || 'Not provided'}`,
+        `Camera/Audio: ${checklist.cameraAudio || 'Not provided'}`,
+        `Power/Battery: ${checklist.powerBattery || 'Not provided'}`,
+    ];
+
+    if (checklist.additionalNotes) {
+        lines.push(`Notes: ${checklist.additionalNotes}`);
+    }
+
+    const output = lines.join('\n');
+    return output.length > 1024 ? `${output.slice(0, 1021)}...` : output;
+}
+
 function ticketEmbed(ticket) {
     const color = PRIORITY_COLORS[ticket.priority] || 0x5865f2;
     const createdTs = Math.floor(new Date(ticket.createdAt).getTime() / 1000);
@@ -46,13 +63,17 @@ function ticketEmbed(ticket) {
         .setTitle(`${DEVICE_EMOJIS[ticket.deviceType] || '🔧'} Repair Ticket #${ticket.ticketNumber}`)
         .setColor(color)
         .addFields(
-            { name: '👤 Customer', value: `<@${ticket.userId}>`, inline: true },
+            { name: '👤 Customer Discord', value: `<@${ticket.userId}>`, inline: true },
+            { name: '🪪 Customer Name', value: ticket.customerName || 'Not provided', inline: true },
+            { name: '📞 Phone', value: ticket.customerPhone || 'Not provided', inline: true },
+            { name: '✉️ Email', value: ticket.customerEmail || 'Not provided', inline: true },
             { name: '📋 Status', value: `${STATUS_EMOJIS[ticket.status] || ''} ${ticket.status}`, inline: true },
             { name: '⚡ Priority', value: ticket.priority, inline: true },
             { name: `${DEVICE_EMOJIS[ticket.deviceType] || '🔧'} Device Type`, value: ticket.deviceType, inline: true },
             { name: '📱 Device Model', value: ticket.deviceModel, inline: true },
             { name: '🔧 Assigned To', value: ticket.assignedTo ? `<@${ticket.assignedTo}>` : 'Unassigned', inline: true },
             { name: '📝 Issue Description', value: ticket.issue },
+            { name: '🧪 First-Look Pre-Test', value: formatPreTestChecklist(ticket) },
             { name: '🧾 Tech Notes', value: formatTechNotes(ticket) },
             { name: '📅 Due Date', value: ticket.dueDate || 'Not set', inline: true },
             { name: '🕐 Created', value: `<t:${createdTs}:R>`, inline: true },

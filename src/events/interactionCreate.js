@@ -15,6 +15,7 @@ const {
 const { createTicket, getTicket, updateTicket, deleteTicket } = require('../utils/ticketManager');
 const { ticketEmbed, buildStaffActionRows } = require('../utils/embeds');
 const config = require('../../config.json');
+const pendingTicketDrafts = new Map();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ module.exports = {
                     ]),
             );
             await interaction.reply({
-                content: '**Step 1 of 3** — What type of device needs repair?',
+                content: '**Step 1 of 4** — What type of device needs repair?',
                 components: [row],
                 ephemeral: true,
             });
@@ -96,7 +97,7 @@ module.exports = {
                     ]),
             );
             await interaction.update({
-                content: `**Step 2 of 3** — Priority for your **${deviceType}** repair?`,
+                content: `**Step 2 of 4** — Priority for your **${deviceType}** repair?`,
                 components: [row],
             });
             return;
@@ -108,10 +109,37 @@ module.exports = {
             const priority = interaction.values[0];
 
             const modal = new ModalBuilder()
-                .setCustomId(`ticket_modal:${deviceType}:${priority}`)
-                .setTitle(`${deviceType} Repair — ${priority} Priority`);
+                .setCustomId(`ticket_customer_modal:${deviceType}:${priority}`)
+                .setTitle('Customer Intake (Step 3 of 4)');
 
             modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('customer_name')
+                        .setLabel('Customer Full Name')
+                        .setPlaceholder('e.g. John Smith')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(100),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('customer_phone')
+                        .setLabel('Customer Phone Number')
+                        .setPlaceholder('e.g. (555) 123-4567')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(40),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('customer_email')
+                        .setLabel('Customer Email')
+                        .setPlaceholder('e.g. customer@email.com')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(100),
+                ),
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId('device_model')
@@ -136,13 +164,102 @@ module.exports = {
             return;
         }
 
-        // ── Modal: Ticket Submission ──────────────────────────────────────────
-        if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket_modal:')) {
+        // ── Modal: Customer Intake (Step 3 of 4) ─────────────────────────────
+        if (interaction.isModalSubmit() && interaction.customId.startsWith('ticket_customer_modal:')) {
             const parts = interaction.customId.split(':');
             const deviceType = parts[1];
             const priority = parts[2];
+            const customerName = interaction.fields.getTextInputValue('customer_name').trim();
+            const customerPhone = interaction.fields.getTextInputValue('customer_phone').trim();
+            const customerEmail = interaction.fields.getTextInputValue('customer_email').trim();
             const deviceModel = interaction.fields.getTextInputValue('device_model');
             const issue = interaction.fields.getTextInputValue('issue_description');
+
+            pendingTicketDrafts.set(`${interaction.guildId}:${interaction.user.id}`, {
+                deviceType,
+                priority,
+                customerName,
+                customerPhone,
+                customerEmail,
+                deviceModel,
+                issue,
+            });
+
+            const modal = new ModalBuilder()
+                .setCustomId('ticket_pretest_modal')
+                .setTitle('First-Look Pre-Test (Step 4 of 4)');
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('pretest_display_touch')
+                        .setLabel('Display & Touch State')
+                        .setPlaceholder('e.g. cracked, no dead pixels, touch works')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(120),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('pretest_buttons_ports')
+                        .setLabel('Buttons & Ports State')
+                        .setPlaceholder('e.g. power button sticky, charging port loose')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(120),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('pretest_camera_audio')
+                        .setLabel('Camera & Audio State')
+                        .setPlaceholder('e.g. rear camera OK, speaker muffled')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(120),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('pretest_power_battery')
+                        .setLabel('Power & Battery State')
+                        .setPlaceholder('e.g. boots slowly, battery drains quickly')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(120),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('pretest_additional_notes')
+                        .setLabel('Additional Pre-Test Notes')
+                        .setPlaceholder('Optional additional condition notes before repair')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(false)
+                        .setMaxLength(500),
+                ),
+            );
+
+            await interaction.showModal(modal);
+            return;
+        }
+
+        // ── Modal: Ticket Submission (after pre-test) ────────────────────────
+        if (interaction.isModalSubmit() && interaction.customId === 'ticket_pretest_modal') {
+            const draftKey = `${interaction.guildId}:${interaction.user.id}`;
+            const draft = pendingTicketDrafts.get(draftKey);
+            if (!draft) {
+                await interaction.reply({
+                    content: '❌ Ticket intake expired. Please start again from the ticket panel.',
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            const preTestChecklist = {
+                displayTouch: interaction.fields.getTextInputValue('pretest_display_touch').trim(),
+                buttonsPorts: interaction.fields.getTextInputValue('pretest_buttons_ports').trim(),
+                cameraAudio: interaction.fields.getTextInputValue('pretest_camera_audio').trim(),
+                powerBattery: interaction.fields.getTextInputValue('pretest_power_battery').trim(),
+                additionalNotes: interaction.fields.getTextInputValue('pretest_additional_notes').trim(),
+            };
 
             await interaction.deferReply({ ephemeral: true });
 
@@ -231,14 +348,18 @@ module.exports = {
                 const ticket = createTicket(ticketChannel.id, {
                     userId: interaction.user.id,
                     username: interaction.user.username,
-                    deviceType,
-                    deviceModel,
-                    issue,
-                    priority,
+                    customerName: draft.customerName,
+                    customerPhone: draft.customerPhone,
+                    customerEmail: draft.customerEmail,
+                    deviceType: draft.deviceType,
+                    deviceModel: draft.deviceModel,
+                    issue: draft.issue,
+                    preTestChecklist,
+                    priority: draft.priority,
                 });
 
                 // Rename channel with ticket number
-                await ticketChannel.setName(`ticket-${ticket.ticketNumber}-${deviceType.toLowerCase()}`);
+                await ticketChannel.setName(`ticket-${ticket.ticketNumber}-${draft.deviceType.toLowerCase()}`);
 
                 // Send ticket embed with staff action buttons
                 const staffMention = config.staffRoleId ? ` <@&${config.staffRoleId}>` : '';
@@ -254,6 +375,7 @@ module.exports = {
                 await interaction.editReply({
                     content: `✅ Your repair ticket has been created! Head to <#${ticketChannel.id}>.`,
                 });
+                pendingTicketDrafts.delete(draftKey);
             } catch (err) {
                 if (err instanceof DiscordAPIError) {
                     console.error(`Failed to create ticket channel [${err.code}]:`, err.message);
@@ -263,6 +385,7 @@ module.exports = {
                 await interaction.editReply({
                     content: '❌ Failed to create ticket channel. Check bot permissions and config IDs (guild, staff role, and category).',
                 });
+                pendingTicketDrafts.delete(draftKey);
             }
             return;
         }
