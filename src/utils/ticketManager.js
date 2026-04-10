@@ -34,6 +34,7 @@ function createTicket(channelId, data) {
         assignedTo: null,
         assignedName: null,
         dueDate: null,
+        techNotes: [],
         embedMessageId: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

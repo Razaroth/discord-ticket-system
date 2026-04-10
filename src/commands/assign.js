@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const { getTicket, updateTicket } = require('../utils/ticketManager');
-const { ticketEmbed, buildStaffActionRow } = require('../utils/embeds');
+const { ticketEmbed, buildStaffActionRows } = require('../utils/embeds');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -29,7 +29,7 @@ module.exports = {
         if (updated.embedMessageId) {
             try {
                 const msg = await interaction.channel.messages.fetch(updated.embedMessageId);
-                await msg.edit({ embeds: [ticketEmbed(updated)], components: [buildStaffActionRow(updated)] });
+                await msg.edit({ embeds: [ticketEmbed(updated)], components: buildStaffActionRows(updated) });
             } catch { /* Message may have been deleted */ }
         }
 

@@ -23,6 +23,21 @@ const DEVICE_EMOJIS = {
     Computer: '💻',
 };
 
+function formatTechNotes(ticket) {
+    const notes = Array.isArray(ticket.techNotes) ? ticket.techNotes : [];
+    if (notes.length === 0) return 'No notes yet.';
+
+    const latest = notes.slice(-3).reverse();
+    return latest
+        .map((n, i) => {
+            const author = n.authorId ? `<@${n.authorId}>` : 'Unknown';
+            const body = (n.content || '').trim();
+            const clipped = body.length > 170 ? `${body.slice(0, 167)}...` : body;
+            return `${i + 1}. ${author}: ${clipped || 'No content'}`;
+        })
+        .join('\n');
+}
+
 function ticketEmbed(ticket) {
     const color = PRIORITY_COLORS[ticket.priority] || 0x5865f2;
     const createdTs = Math.floor(new Date(ticket.createdAt).getTime() / 1000);
@@ -38,6 +53,7 @@ function ticketEmbed(ticket) {
             { name: '📱 Device Model', value: ticket.deviceModel, inline: true },
             { name: '🔧 Assigned To', value: ticket.assignedTo ? `<@${ticket.assignedTo}>` : 'Unassigned', inline: true },
             { name: '📝 Issue Description', value: ticket.issue },
+            { name: '🧾 Tech Notes', value: formatTechNotes(ticket) },
             { name: '📅 Due Date', value: ticket.dueDate || 'Not set', inline: true },
             { name: '🕐 Created', value: `<t:${createdTs}:R>`, inline: true },
         )
@@ -82,21 +98,21 @@ function ticketListEmbed(tickets) {
     return embed;
 }
 
-function buildStaffActionRow(ticket) {
-    const row = new ActionRowBuilder();
+function buildStaffActionRows(ticket) {
+    const primaryRow = new ActionRowBuilder();
 
     if (ticket.status === 'Closed') {
-        row.addComponents(
+        primaryRow.addComponents(
             new ButtonBuilder()
                 .setCustomId('delete_ticket_channel')
                 .setLabel('Delete Channel')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('🗑️'),
         );
-        return row;
+        return [primaryRow];
     }
 
-    row.addComponents(
+    primaryRow.addComponents(
         new ButtonBuilder()
             .setCustomId('assign_ticket')
             .setLabel('Assign to Me')
@@ -105,7 +121,7 @@ function buildStaffActionRow(ticket) {
     );
 
     if (ticket.status === 'Open') {
-        row.addComponents(
+        primaryRow.addComponents(
             new ButtonBuilder()
                 .setCustomId('status_in_progress')
                 .setLabel('In Progress')
@@ -113,7 +129,7 @@ function buildStaffActionRow(ticket) {
                 .setEmoji('🔧'),
         );
     } else {
-        row.addComponents(
+        primaryRow.addComponents(
             new ButtonBuilder()
                 .setCustomId('status_reopen')
                 .setLabel('Reopen')
@@ -122,7 +138,7 @@ function buildStaffActionRow(ticket) {
         );
     }
 
-    row.addComponents(
+    primaryRow.addComponents(
         new ButtonBuilder()
             .setCustomId('change_priority')
             .setLabel('Priority')
@@ -140,13 +156,21 @@ function buildStaffActionRow(ticket) {
             .setEmoji('🔒'),
     );
 
-    return row;
+    const notesRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('add_tech_note')
+            .setLabel('Tech Notes')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🧾'),
+    );
+
+    return [primaryRow, notesRow];
 }
 
 module.exports = {
     ticketEmbed,
     ticketListEmbed,
-    buildStaffActionRow,
+    buildStaffActionRows,
     PRIORITY_COLORS,
     STATUS_EMOJIS,
     DEVICE_EMOJIS,

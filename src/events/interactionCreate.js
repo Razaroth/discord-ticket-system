@@ -13,7 +13,7 @@ const {
 } = require('discord.js');
 
 const { createTicket, getTicket, updateTicket, deleteTicket } = require('../utils/ticketManager');
-const { ticketEmbed, buildStaffActionRow } = require('../utils/embeds');
+const { ticketEmbed, buildStaffActionRows } = require('../utils/embeds');
 const config = require('../../config.json');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ async function updateTicketEmbed(channel, ticket) {
         const msg = await channel.messages.fetch(ticket.embedMessageId);
         await msg.edit({
             embeds: [ticketEmbed(ticket)],
-            components: [buildStaffActionRow(ticket)],
+            components: buildStaffActionRows(ticket),
         });
     } catch {
         // Message may have been deleted — ignore
@@ -245,7 +245,7 @@ module.exports = {
                 const embedMsg = await ticketChannel.send({
                     content: `<@${interaction.user.id}>${staffMention}`,
                     embeds: [ticketEmbed(ticket)],
-                    components: [buildStaffActionRow(ticket)],
+                    components: buildStaffActionRows(ticket),
                 });
 
                 // Store the embed message ID so we can edit it later
@@ -270,7 +270,7 @@ module.exports = {
         // ── Staff-Only Button/Select Handlers ─────────────────────────────────
         const staffButtonIds = [
             'assign_ticket', 'status_in_progress', 'status_reopen',
-            'change_priority', 'set_due_date', 'close_ticket',
+            'change_priority', 'set_due_date', 'add_tech_note', 'close_ticket',
             'confirm_close', 'delete_ticket_channel',
         ];
 
@@ -351,6 +351,53 @@ module.exports = {
             await updateTicketEmbed(interaction.channel, updated);
             await interaction.editReply({ content: `⚡ Priority updated to **${priority}** by <@${interaction.user.id}>.`, components: [] });
             await interaction.channel.send({ content: `⚡ Priority changed to **${priority}** by <@${interaction.user.id}>.` });
+            return;
+        }
+
+        // ── Button: Add Tech Note ────────────────────────────────────────────
+        if (interaction.isButton() && interaction.customId === 'add_tech_note') {
+            const modal = new ModalBuilder()
+                .setCustomId('tech_note_modal')
+                .setTitle('Add Technician Note');
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('tech_note_value')
+                        .setLabel('Repair note')
+                        .setPlaceholder('Write diagnostics, parts used, test results, or next action...')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true)
+                        .setMaxLength(1000),
+                ),
+            );
+
+            await interaction.showModal(modal);
+            return;
+        }
+
+        // ── Modal: Tech Note ─────────────────────────────────────────────────
+        if (interaction.isModalSubmit() && interaction.customId === 'tech_note_modal') {
+            await interaction.deferReply({ ephemeral: true });
+
+            const ticket = getTicket(interaction.channelId);
+            if (!ticket) { await interaction.editReply({ content: '❌ Ticket data not found.' }); return; }
+
+            const noteText = interaction.fields.getTextInputValue('tech_note_value').trim();
+            if (!noteText) { await interaction.editReply({ content: '❌ Note cannot be empty.' }); return; }
+
+            const existing = Array.isArray(ticket.techNotes) ? ticket.techNotes : [];
+            const nextNotes = [...existing, {
+                authorId: interaction.user.id,
+                content: noteText,
+                createdAt: new Date().toISOString(),
+            }].slice(-25);
+
+            const updated = updateTicket(interaction.channelId, { techNotes: nextNotes });
+            await updateTicketEmbed(interaction.channel, updated);
+
+            await interaction.editReply({ content: '✅ Tech note saved to this ticket.' });
+            await interaction.channel.send({ content: `🧾 Tech note added by <@${interaction.user.id}>.` });
             return;
         }
 
