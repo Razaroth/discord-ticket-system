@@ -1,0 +1,17 @@
+{
+  "name": "discord-repair-ticket-bot",
+  "version": "1.0.0",
+  "description": "Phone & Computer Repair Ticketing System for Discord",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
