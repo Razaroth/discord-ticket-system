@@ -1,6 +1,6 @@
 {
   "guildId": "The City of R'lyeh",
   "staffRoleId": "BOT",
-  "ticketsCategoryId": "",
+  "ticketsCategoryId": "discord-ticket-bot-test",
   "logChannelId": ""
 }
