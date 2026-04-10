@@ -9,6 +9,7 @@ const {
     TextInputStyle,
     ChannelType,
     PermissionsBitField,
+    DiscordAPIError,
 } = require('discord.js');
 
 const { createTicket, getTicket, updateTicket, deleteTicket } = require('../utils/ticketManager');
@@ -146,15 +147,52 @@ module.exports = {
             await interaction.deferReply({ ephemeral: true });
 
             const guild = interaction.guild;
+            const me = guild.members.me;
             let category = null;
             if (config.ticketsCategoryId) {
-                category = guild.channels.cache.get(config.ticketsCategoryId) ?? null;
+                const configuredChannel = guild.channels.cache.get(config.ticketsCategoryId) ?? null;
+                if (!configuredChannel) {
+                    await interaction.editReply({
+                        content: '❌ Ticket category ID is invalid or inaccessible. Ask an admin to fix ticketsCategoryId in config.json.',
+                    });
+                    return;
+                }
+
+                if (configuredChannel.type === ChannelType.GuildCategory) {
+                    category = configuredChannel;
+                } else if ('parentId' in configuredChannel && configuredChannel.parentId) {
+                    category = guild.channels.cache.get(configuredChannel.parentId) ?? null;
+                }
+
+                if (!category || category.type !== ChannelType.GuildCategory) {
+                    await interaction.editReply({
+                        content: '❌ ticketsCategoryId must point to a category channel or a channel inside a category.',
+                    });
+                    return;
+                }
+            }
+
+            if (config.staffRoleId) {
+                const staffRole = guild.roles.cache.get(config.staffRoleId);
+                if (!staffRole) {
+                    await interaction.editReply({
+                        content: '❌ staffRoleId is invalid for this server. Ask an admin to update config.json with a valid role ID.',
+                    });
+                    return;
+                }
+            }
+
+            if (!me || !me.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+                await interaction.editReply({
+                    content: '❌ I need the Manage Channels permission to create tickets. Ask an admin to update my role permissions.',
+                });
+                return;
             }
 
             // Create the private ticket channel
             const permissionOverwrites = [
                 {
-                    id: guild.roles.everyone,
+                    id: guild.roles.everyone.id,
                     deny: [PermissionsBitField.Flags.ViewChannel],
                 },
                 {
@@ -217,8 +255,14 @@ module.exports = {
                     content: `✅ Your repair ticket has been created! Head to <#${ticketChannel.id}>.`,
                 });
             } catch (err) {
-                console.error('Failed to create ticket channel:', err);
-                await interaction.editReply({ content: '❌ Failed to create ticket channel. Please contact an administrator.' });
+                if (err instanceof DiscordAPIError) {
+                    console.error(`Failed to create ticket channel [${err.code}]:`, err.message);
+                } else {
+                    console.error('Failed to create ticket channel:', err);
+                }
+                await interaction.editReply({
+                    content: '❌ Failed to create ticket channel. Check bot permissions and config IDs (guild, staff role, and category).',
+                });
             }
             return;
         }
