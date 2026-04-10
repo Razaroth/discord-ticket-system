@@ -38,6 +38,30 @@ function formatTechNotes(ticket) {
         .join('\n');
 }
 
+function formatCloseChecklist(ticket) {
+    const checklist = ticket.closeChecklist;
+    if (!checklist) return 'Not completed yet.';
+
+    const checks = [
+        { label: 'Customer Notified', key: 'customerNotified' },
+        { label: 'Work Completed', key: 'workCompleted' },
+        { label: 'Tested & Verified', key: 'tested' },
+        { label: 'Payment Received', key: 'paymentReceived' },
+        { label: 'Device Returned', key: 'deviceReturned' },
+    ];
+
+    const lines = checks.map(c => {
+        const val = checklist[c.key] === true ? '✅' : '❌';
+        return `${val} ${c.label}`;
+    });
+
+    if (checklist.notes) {
+        lines.push(`Notes: ${checklist.notes}`);
+    }
+
+    return lines.join('\n');
+}
+
 function formatPreTestChecklist(ticket) {
     const checklist = ticket.preTestChecklist || {};
     const lines = [
@@ -75,6 +99,7 @@ function ticketEmbed(ticket) {
             { name: '📝 Issue Description', value: ticket.issue },
             { name: '🧪 First-Look Pre-Test', value: formatPreTestChecklist(ticket) },
             { name: '🧾 Tech Notes', value: formatTechNotes(ticket) },
+            { name: '✔️ Close Checklist', value: formatCloseChecklist(ticket) },
             { name: '📅 Due Date', value: ticket.dueDate || 'Not set', inline: true },
             { name: '🕐 Created', value: `<t:${createdTs}:R>`, inline: true },
         )

@@ -26,6 +26,20 @@ function hasStaffPermission(member) {
     return false;
 }
 
+function slugChannelPart(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 45);
+}
+
+function buildCustomerTicketChannelName(customerName, deviceType) {
+    const namePart = slugChannelPart(customerName) || 'customer';
+    const typePart = slugChannelPart(deviceType) || 'device';
+    return `${namePart}-${typePart}`.slice(0, 100);
+}
+
 async function updateTicketEmbed(channel, ticket) {
     if (!ticket.embedMessageId) return;
     try {
@@ -184,6 +198,34 @@ module.exports = {
                 deviceModel,
                 issue,
             });
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('continue_pretest')
+                    .setLabel('Continue to Pre-Test Checklist')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('🧪'),
+            );
+
+            await interaction.reply({
+                content: '**Step 4 of 4** — Click below to complete the first-look pre-test checklist.',
+                components: [row],
+                ephemeral: true,
+            });
+            return;
+        }
+
+        // ── Button: Continue to Pre-Test (opens modal) ──────────────────────
+        if (interaction.isButton() && interaction.customId === 'continue_pretest') {
+            const draftKey = `${interaction.guildId}:${interaction.user.id}`;
+            const draft = pendingTicketDrafts.get(draftKey);
+            if (!draft) {
+                await interaction.reply({
+                    content: '❌ Ticket intake expired. Please start again from the ticket panel.',
+                    ephemeral: true,
+                });
+                return;
+            }
 
             const modal = new ModalBuilder()
                 .setCustomId('ticket_pretest_modal')
@@ -358,8 +400,9 @@ module.exports = {
                     priority: draft.priority,
                 });
 
-                // Rename channel with ticket number
-                await ticketChannel.setName(`ticket-${ticket.ticketNumber}-${draft.deviceType.toLowerCase()}`);
+                // Rename channel to customer-name + device-type for quick triage
+                const ticketChannelName = buildCustomerTicketChannelName(draft.customerName, draft.deviceType);
+                await ticketChannel.setName(ticketChannelName);
 
                 // Send ticket embed with staff action buttons
                 const staffMention = config.staffRoleId ? ` <@&${config.staffRoleId}>` : '';
@@ -394,7 +437,7 @@ module.exports = {
         const staffButtonIds = [
             'assign_ticket', 'status_in_progress', 'status_reopen',
             'change_priority', 'set_due_date', 'add_tech_note', 'close_ticket',
-            'confirm_close', 'delete_ticket_channel',
+            'confirm_close_checklist', 'delete_ticket_channel',
         ];
 
         if (
@@ -558,27 +601,154 @@ module.exports = {
             return;
         }
 
-        // ── Button: Close Ticket ──────────────────────────────────────────────
+        // ── Button: Close Ticket (shows checklist modal) ────────────────────────
         if (interaction.isButton() && interaction.customId === 'close_ticket') {
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('confirm_close')
-                    .setLabel('Confirm Close')
-                    .setStyle(ButtonStyle.Danger),
-                new ButtonBuilder()
-                    .setCustomId('cancel_close')
-                    .setLabel('Cancel')
-                    .setStyle(ButtonStyle.Secondary),
+            const modal = new ModalBuilder()
+                .setCustomId('close_ticket_modal')
+                .setTitle('Repair Completion Checklist');
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('check_customer_notified')
+                        .setLabel('Customer Notified? (yes/no)')
+                        .setPlaceholder('Have you informed the customer the repair is complete?')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(10),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('check_work_completed')
+                        .setLabel('Work Completed? (yes/no)')
+                        .setPlaceholder('Have you finished all repair work?')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(10),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('check_tested')
+                        .setLabel('Tested & Verified? (yes/no)')
+                        .setPlaceholder('Have you tested and verified the repair?')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(10),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('check_payment')
+                        .setLabel('Payment Received? (yes/no)')
+                        .setPlaceholder('Has the customer paid for the repair?')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(10),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('check_device_returned')
+                        .setLabel('Device Returned? (yes/no)')
+                        .setPlaceholder('Has the device been given back to the customer?')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setMaxLength(10),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('close_notes')
+                        .setLabel('Final Notes (Optional)')
+                        .setPlaceholder('Any notes about the completion...')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(false)
+                        .setMaxLength(500),
+                ),
             );
-            await interaction.reply({
-                content: '⚠️ Are you sure you want to close this ticket?',
-                components: [row],
-                ephemeral: true,
-            });
+
+            await interaction.showModal(modal);
             return;
         }
 
-        // ── Button: Confirm Close ─────────────────────────────────────────────
+        // ── Modal: Close Checklist ────────────────────────────────────────────
+        if (interaction.isModalSubmit() && interaction.customId === 'close_ticket_modal') {
+            await interaction.deferReply({ ephemeral: true });
+
+            const ticket = getTicket(interaction.channelId);
+            if (!ticket) { await interaction.editReply({ content: '❌ Ticket data not found.' }); return; }
+            if (ticket.status === 'Closed') { await interaction.editReply({ content: '⚠️ Already closed.' }); return; }
+
+            const checkIfYes = (val) => val && /^y|yes|true|✅|1/i.test(String(val).trim());
+
+            const closeChecklist = {
+                customerNotified: checkIfYes(interaction.fields.getTextInputValue('check_customer_notified')),
+                workCompleted: checkIfYes(interaction.fields.getTextInputValue('check_work_completed')),
+                tested: checkIfYes(interaction.fields.getTextInputValue('check_tested')),
+                paymentReceived: checkIfYes(interaction.fields.getTextInputValue('check_payment')),
+                deviceReturned: checkIfYes(interaction.fields.getTextInputValue('check_device_returned')),
+                notes: interaction.fields.getTextInputValue('close_notes').trim() || null,
+                closedAt: new Date().toISOString(),
+                closedBy: interaction.user.id,
+            };
+
+            try {
+                const updated = updateTicket(interaction.channelId, {
+                    status: 'Closed',
+                    closeChecklist,
+                });
+
+                // Revoke customer's ability to send messages
+                await interaction.channel.permissionOverwrites.edit(ticket.userId, {
+                    SendMessages: false,
+                    AddReactions: false,
+                });
+
+                // Rename channel to closed- + customer name + device type
+                const namePart = String(ticket.customerName || 'customer')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .slice(0, 40);
+                const typePart = String(ticket.deviceType || 'device')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .slice(0, 40);
+                const closedChannelName = `closed-${namePart}-${typePart}`.slice(0, 100);
+                await interaction.channel.setName(closedChannelName);
+
+                // Update the embed
+                await updateTicketEmbed(interaction.channel, updated);
+
+                // Log to log channel if configured
+                if (config.logChannelId) {
+                    const logChannel = interaction.guild.channels.cache.get(config.logChannelId);
+                    if (logChannel) {
+                        await logChannel.send({
+                            content: `🔒 Ticket **#${updated.ticketNumber}** closed by <@${interaction.user.id}>`,
+                            embeds: [ticketEmbed(updated)],
+                        });
+                    }
+                }
+
+                await interaction.editReply({ content: '✅ Ticket closed with completion checklist.' });
+
+                // Post closure notice with delete button for staff
+                const deleteRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('delete_ticket_channel')
+                        .setLabel('Delete Channel')
+                        .setStyle(ButtonStyle.Danger)
+                        .setEmoji('🗑️'),
+                );
+                await interaction.channel.send({
+                    content: `🔒 Ticket closed by <@${interaction.user.id}>. Staff may delete this channel when ready.`,
+                    components: [deleteRow],
+                });
+            } catch (err) {
+                console.error('Error closing ticket:', err);
+                await interaction.editReply({ content: '❌ An error occurred while closing the ticket.' });
+            }
+            return;
+        }
+
+        // ── Button: Confirm Close (deprecated, kept for compatibility) ────────
         if (interaction.isButton() && interaction.customId === 'confirm_close') {
             await interaction.deferUpdate();
             const ticket = getTicket(interaction.channelId);
@@ -634,11 +804,7 @@ module.exports = {
             return;
         }
 
-        // ── Button: Cancel Close ──────────────────────────────────────────────
-        if (interaction.isButton() && interaction.customId === 'cancel_close') {
-            await interaction.update({ content: '✅ Close cancelled.', components: [] });
-            return;
-        }
+
 
         // ── Button: Delete Channel ────────────────────────────────────────────
         if (interaction.isButton() && interaction.customId === 'delete_ticket_channel') {
