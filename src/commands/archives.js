@@ -92,108 +92,124 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
     async execute(interaction) {
-        const archives = sortedArchive();
-        if (archives.length === 0) {
-            await interaction.reply({
-                content: 'No archived closed tickets found yet.',
-                ephemeral: true,
+        await interaction.deferReply({ ephemeral: true });
+
+        try {
+            const archives = sortedArchive();
+            if (archives.length === 0) {
+                await interaction.editReply({
+                    content: 'No archived closed tickets found yet.',
+                });
+                return;
+            }
+
+            const sub = interaction.options.getSubcommand();
+
+            if (sub === 'recent') {
+                const limit = interaction.options.getInteger('limit') || 5;
+                const items = archives.slice(0, limit);
+                const desc = items.map(formatRecentLine).join('\n');
+
+                const embed = new EmbedBuilder()
+                    .setTitle('Closed Ticket Archive - Recent')
+                    .setColor(0x3498db)
+                    .setDescription(trimValue(desc, 4000))
+                    .setFooter({ text: `${archives.length} archived ticket(s) total` })
+                    .setTimestamp();
+
+                await interaction.editReply({ embeds: [embed] });
+                return;
+            }
+
+            if (sub === 'ticket') {
+                const number = interaction.options.getInteger('number', true);
+                const found = archives.find((t) => Number(t.ticketNumber) === number);
+                if (!found) {
+                    await interaction.editReply({
+                        content: `No archived ticket found with number #${number}.`,
+                    });
+                    return;
+                }
+
+                const createdTs = toTs(found.createdAt);
+                const archivedTs = toTs(found.archivedAt || found.updatedAt);
+                const closedBy = found.closeChecklist?.closedBy || found.closedBy;
+                const techNotes = Array.isArray(found.techNotes) && found.techNotes.length > 0
+                    ? found.techNotes.slice(-5).map((n, i) => `${i + 1}. ${(n.content || '').trim() || 'No content'}`).join('\n')
+                    : 'No tech notes recorded';
+
+                const preTest = found.preTestChecklist
+                    ? trimValue([
+                        `Display/Touch: ${found.preTestChecklist.displayTouch || 'N/A'}`,
+                        `Buttons/Ports: ${found.preTestChecklist.buttonsPorts || 'N/A'}`,
+                        `Camera/Audio: ${found.preTestChecklist.cameraAudio || 'N/A'}`,
+                        `Power/Battery: ${found.preTestChecklist.powerBattery || 'N/A'}`,
+                        `Notes: ${found.preTestChecklist.additionalNotes || 'N/A'}`,
+                    ].join('\n'))
+                    : 'Not recorded';
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`Archived Ticket #${found.ticketNumber || '?'}`)
+                    .setColor(0x2ecc71)
+                    .addFields(
+                        { name: 'Customer Name', value: trimValue(found.customerName || found.username || 'Unknown'), inline: true },
+                        { name: 'Phone', value: trimValue(found.customerPhone || 'Not provided'), inline: true },
+                        { name: 'Email', value: trimValue(found.customerEmail || 'Not provided'), inline: true },
+                        { name: 'Device Type', value: trimValue(found.deviceType || 'Unknown'), inline: true },
+                        { name: 'Device Model', value: trimValue(found.deviceModel || 'Unknown'), inline: true },
+                        { name: 'Priority', value: trimValue(found.priority || 'Unknown'), inline: true },
+                        { name: 'Issue', value: trimValue(found.issue || 'Not provided') },
+                        { name: 'First-Look Pre-Test', value: preTest },
+                        { name: 'Tech Notes (latest 5)', value: trimValue(techNotes) },
+                        { name: 'Close Checklist', value: formatChecklist(found) },
+                        { name: 'Closed By', value: closedBy ? `<@${closedBy}>` : 'Not recorded', inline: true },
+                        { name: 'Created', value: createdTs ? `<t:${createdTs}:F>` : 'Unknown', inline: true },
+                        { name: 'Archived', value: archivedTs ? `<t:${archivedTs}:F>` : 'Unknown', inline: true },
+                    )
+                    .setTimestamp();
+
+                await interaction.editReply({ embeds: [embed] });
+                return;
+            }
+
+            if (sub === 'customer') {
+                const nameQuery = interaction.options.getString('name', true).toLowerCase();
+                const matches = archives
+                    .filter((t) => (t.customerName || t.username || '').toLowerCase().includes(nameQuery))
+                    .slice(0, 10);
+
+                if (matches.length === 0) {
+                    await interaction.editReply({
+                        content: 'No archived tickets match that customer name.',
+                    });
+                    return;
+                }
+
+                const lines = matches.map(formatRecentLine).join('\n');
+                const embed = new EmbedBuilder()
+                    .setTitle(`Archive Search - "${interaction.options.getString('name', true)}"`)
+                    .setColor(0x9b59b6)
+                    .setDescription(trimValue(lines, 4000))
+                    .setFooter({ text: `${matches.length} result(s)` })
+                    .setTimestamp();
+
+                await interaction.editReply({ embeds: [embed] });
+                return;
+            }
+
+            await interaction.editReply({
+                content: 'Unknown archives subcommand.',
             });
-            return;
-        }
-
-        const sub = interaction.options.getSubcommand();
-
-        if (sub === 'recent') {
-            const limit = interaction.options.getInteger('limit') || 5;
-            const items = archives.slice(0, limit);
-            const desc = items.map(formatRecentLine).join('\n');
-
-            const embed = new EmbedBuilder()
-                .setTitle('Closed Ticket Archive - Recent')
-                .setColor(0x3498db)
-                .setDescription(trimValue(desc, 4000))
-                .setFooter({ text: `${archives.length} archived ticket(s) total` })
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-            return;
-        }
-
-        if (sub === 'ticket') {
-            const number = interaction.options.getInteger('number', true);
-            const found = archives.find((t) => Number(t.ticketNumber) === number);
-            if (!found) {
-                await interaction.reply({
-                    content: `No archived ticket found with number #${number}.`,
-                    ephemeral: true,
+        } catch (err) {
+            console.error('Error in /archives:', err);
+            const payload = { content: '❌ The archives command failed. Please try again.' };
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply(payload).catch(async () => {
+                    await interaction.followUp({ ...payload, ephemeral: true }).catch(() => {});
                 });
-                return;
+            } else {
+                await interaction.reply({ ...payload, ephemeral: true }).catch(() => {});
             }
-
-            const createdTs = toTs(found.createdAt);
-            const archivedTs = toTs(found.archivedAt || found.updatedAt);
-            const closedBy = found.closeChecklist?.closedBy || found.closedBy;
-            const techNotes = Array.isArray(found.techNotes) && found.techNotes.length > 0
-                ? found.techNotes.slice(-5).map((n, i) => `${i + 1}. ${(n.content || '').trim() || 'No content'}`).join('\n')
-                : 'No tech notes recorded';
-
-            const preTest = found.preTestChecklist
-                ? trimValue([
-                    `Display/Touch: ${found.preTestChecklist.displayTouch || 'N/A'}`,
-                    `Buttons/Ports: ${found.preTestChecklist.buttonsPorts || 'N/A'}`,
-                    `Camera/Audio: ${found.preTestChecklist.cameraAudio || 'N/A'}`,
-                    `Power/Battery: ${found.preTestChecklist.powerBattery || 'N/A'}`,
-                    `Notes: ${found.preTestChecklist.additionalNotes || 'N/A'}`,
-                ].join('\n'))
-                : 'Not recorded';
-
-            const embed = new EmbedBuilder()
-                .setTitle(`Archived Ticket #${found.ticketNumber || '?'}`)
-                .setColor(0x2ecc71)
-                .addFields(
-                    { name: 'Customer Name', value: trimValue(found.customerName || found.username || 'Unknown'), inline: true },
-                    { name: 'Phone', value: trimValue(found.customerPhone || 'Not provided'), inline: true },
-                    { name: 'Email', value: trimValue(found.customerEmail || 'Not provided'), inline: true },
-                    { name: 'Device Type', value: trimValue(found.deviceType || 'Unknown'), inline: true },
-                    { name: 'Device Model', value: trimValue(found.deviceModel || 'Unknown'), inline: true },
-                    { name: 'Priority', value: trimValue(found.priority || 'Unknown'), inline: true },
-                    { name: 'Issue', value: trimValue(found.issue || 'Not provided') },
-                    { name: 'First-Look Pre-Test', value: preTest },
-                    { name: 'Tech Notes (latest 5)', value: trimValue(techNotes) },
-                    { name: 'Close Checklist', value: formatChecklist(found) },
-                    { name: 'Closed By', value: closedBy ? `<@${closedBy}>` : 'Not recorded', inline: true },
-                    { name: 'Created', value: createdTs ? `<t:${createdTs}:F>` : 'Unknown', inline: true },
-                    { name: 'Archived', value: archivedTs ? `<t:${archivedTs}:F>` : 'Unknown', inline: true },
-                )
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-            return;
-        }
-
-        if (sub === 'customer') {
-            const nameQuery = interaction.options.getString('name', true).toLowerCase();
-            const matches = archives
-                .filter((t) => (t.customerName || t.username || '').toLowerCase().includes(nameQuery))
-                .slice(0, 10);
-
-            if (matches.length === 0) {
-                await interaction.reply({
-                    content: 'No archived tickets match that customer name.',
-                    ephemeral: true,
-                });
-                return;
-            }
-
-            const lines = matches.map(formatRecentLine).join('\n');
-            const embed = new EmbedBuilder()
-                .setTitle(`Archive Search - "${interaction.options.getString('name', true)}"`)
-                .setColor(0x9b59b6)
-                .setDescription(trimValue(lines, 4000))
-                .setFooter({ text: `${matches.length} result(s)` })
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed], ephemeral: true });
         }
     },
 };
