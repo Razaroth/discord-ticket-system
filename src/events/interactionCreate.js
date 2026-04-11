@@ -611,15 +611,6 @@ module.exports = {
             modal.addComponents(
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
-                        .setCustomId('check_customer_notified')
-                        .setLabel('Customer Notified? (yes/no)')
-                        .setPlaceholder('Have you informed the customer the repair is complete?')
-                        .setStyle(TextInputStyle.Short)
-                        .setRequired(true)
-                        .setMaxLength(10),
-                ),
-                new ActionRowBuilder().addComponents(
-                    new TextInputBuilder()
                         .setCustomId('check_work_completed')
                         .setLabel('Work Completed? (yes/no)')
                         .setPlaceholder('Have you finished all repair work?')
@@ -680,7 +671,6 @@ module.exports = {
             const checkIfYes = (val) => val && /^y|yes|true|✅|1/i.test(String(val).trim());
 
             const closeChecklist = {
-                customerNotified: checkIfYes(interaction.fields.getTextInputValue('check_customer_notified')),
                 workCompleted: checkIfYes(interaction.fields.getTextInputValue('check_work_completed')),
                 tested: checkIfYes(interaction.fields.getTextInputValue('check_tested')),
                 paymentReceived: checkIfYes(interaction.fields.getTextInputValue('check_payment')),
@@ -819,6 +809,13 @@ module.exports = {
         if (interaction.isButton() && interaction.customId === 'delete_ticket_channel') {
             await interaction.deferReply({ ephemeral: true });
             await interaction.editReply({ content: '🗑️ Deleting channel in 5 seconds...' });
+            const ticket = getTicket(interaction.channelId);
+            if (ticket) {
+                archiveClosedTicket(ticket, {
+                    closedBy: interaction.user.id,
+                    closeSource: 'delete-ticket-channel-fallback',
+                });
+            }
             deleteTicket(interaction.channelId);
             setTimeout(() => {
                 interaction.channel.delete(`Ticket deleted by ${interaction.user.tag}`).catch(console.error);

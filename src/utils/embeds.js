@@ -43,7 +43,6 @@ function formatCloseChecklist(ticket) {
     if (!checklist) return 'Not completed yet.';
 
     const checks = [
-        { label: 'Customer Notified', key: 'customerNotified' },
         { label: 'Work Completed', key: 'workCompleted' },
         { label: 'Tested & Verified', key: 'tested' },
         { label: 'Payment Received', key: 'paymentReceived' },
