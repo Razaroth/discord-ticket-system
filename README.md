@@ -1,6 +1,6 @@
 # Discord Repair Ticket Bot
 
-Phone and computer repair ticketing bot for Discord, built with `discord.js` v14.
+Phone and computer repair ticketing bot for Discord...because well, it's cool ;)
 
 ## Features
 
