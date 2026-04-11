@@ -1,0 +1,48 @@
+[
+  {
+    "archivedAt": "2026-04-11T01:17:41.374Z",
+    "closedBy": "569900703644909569",
+    "closeSource": "delete-ticket-channel-fallback",
+    "id": "1492332416654643341",
+    "ticketNumber": 1,
+    "userId": "569900703644909569",
+    "username": "equatix",
+    "customerName": "Trevor",
+    "customerPhone": "091823098102938",
+    "customerEmail": "oliakhjsfolkj@;laksjdjl;ak.com",
+    "deviceType": "Phone",
+    "deviceModel": "iPhone 19",
+    "issue": "Cracked screen",
+    "preTestChecklist": {
+      "displayTouch": "laksjdlkjasd",
+      "buttonsPorts": "lkasjdfflkjasdlkj",
+      "cameraAudio": "alskjdlaksjhd",
+      "powerBattery": "alkjdslkjaslkdjasd",
+      "additionalNotes": ""
+    },
+    "priority": "Low",
+    "status": "Closed",
+    "assignedTo": "569900703644909569",
+    "assignedName": "equatix",
+    "dueDate": null,
+    "techNotes": [
+      {
+        "authorId": "569900703644909569",
+        "content": "wanker",
+        "createdAt": "2026-04-11T01:17:04.033Z"
+      }
+    ],
+    "closeChecklist": {
+      "workCompleted": true,
+      "tested": true,
+      "paymentReceived": true,
+      "deviceReturned": false,
+      "notes": null,
+      "closedAt": "2026-04-11T01:17:32.234Z",
+      "closedBy": "569900703644909569"
+    },
+    "embedMessageId": "1492332418554663125",
+    "createdAt": "2026-04-11T01:16:11.440Z",
+    "updatedAt": "2026-04-11T01:17:32.235Z"
+  }
+]
