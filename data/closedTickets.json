@@ -44,5 +44,45 @@
     "embedMessageId": "1492332418554663125",
     "createdAt": "2026-04-11T01:16:11.440Z",
     "updatedAt": "2026-04-11T01:17:32.235Z"
+  },
+  {
+    "archivedAt": "2026-04-11T01:41:38.821Z",
+    "closedBy": "569900703644909569",
+    "closeSource": "delete-ticket-channel-fallback",
+    "id": "1492338274457616565",
+    "ticketNumber": 1,
+    "userId": "569900703644909569",
+    "username": "equatix",
+    "customerName": "Josh Smith",
+    "customerPhone": "4058817840",
+    "customerEmail": "jlester319@gmail.com",
+    "deviceType": "Phone",
+    "deviceModel": "IPhone 11 Pro",
+    "issue": "cracked screen",
+    "preTestChecklist": {
+      "displayTouch": "Minor cracks",
+      "buttonsPorts": "All working",
+      "cameraAudio": "All working",
+      "powerBattery": "Normal",
+      "additionalNotes": ""
+    },
+    "priority": "High",
+    "status": "Closed",
+    "assignedTo": null,
+    "assignedName": null,
+    "dueDate": null,
+    "techNotes": [],
+    "closeChecklist": {
+      "workCompleted": true,
+      "tested": true,
+      "paymentReceived": true,
+      "deviceReturned": true,
+      "notes": null,
+      "closedAt": "2026-04-11T01:41:35.070Z",
+      "closedBy": "569900703644909569"
+    },
+    "embedMessageId": "1492338276827136091",
+    "createdAt": "2026-04-11T01:39:28.020Z",
+    "updatedAt": "2026-04-11T01:41:35.070Z"
   }
 ]
